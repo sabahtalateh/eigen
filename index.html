@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" onload="scenes.forEach(s => s.draw()); renderEigenFormula()"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #111; overflow: hidden; display: flex; }
+  .panel { position: relative; flex: 1; }
+  #panel-right { border-left: 2px solid #666; }
+  canvas { display: block; }
+  #system {
+    position: fixed;
+    top: 24px;
+    left: 24px;
+    color: #ccc;
+    user-select: none;
+    background: rgba(0,0,0,0.25);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 0;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  #drag-handle {
+    cursor: move;
+    height: 24px;
+    border-bottom: 1px solid #333;
+    background: rgba(255,255,255,0.04);
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 8px 8px 0 0;
+    position: relative;
+  }
+  #drag-handle::before {
+    content: ''; width: 30px; height: 3px; border-radius: 2px; background: #555;
+  }
+  #collapse-btn {
+    position: absolute; right: 8px;
+    background: none; border: none; color: #666;
+    font-size: 13px; cursor: pointer; line-height: 1;
+    pointer-events: auto; padding: 2px 4px;
+    user-select: none;
+  }
+  #collapse-btn:hover { color: #aaa; }
+  #system.collapsed #system-body { display: none; }
+  #system.collapsed { width: 120px; }
+  #system.collapsed #drag-handle { border-bottom: none; border-radius: 8px; }
+  #system-body {
+    padding: 14px 18px;
+    display: flex; flex-direction: column; gap: 12px;
+    overflow-y: auto;
+    max-height: calc(100vh - 60px);
+  }
+  .mat-row { display: flex; align-items: center; gap: 10px; font-size: 15px; font-family: serif; }
+  .mat-wrap { display: flex; align-items: stretch; gap: 2px; }
+  .mat-bracket {
+    width: 7px;
+    border-top: 2px solid #888;
+    border-bottom: 2px solid #888;
+  }
+  .mat-bracket.left  { border-left:  2px solid #888; border-radius: 3px 0 0 3px; }
+  .mat-bracket.right { border-right: 2px solid #888; border-radius: 0 3px 3px 0; }
+  .mat-cells { display: grid; gap: 3px 10px; padding: 4px 3px; align-items: center; }
+  input.mat-in {
+    width: 36px;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid #555;
+    color: inherit;
+    font-size: 15px;
+    font-family: serif;
+    text-align: center;
+    outline: none;
+    padding: 1px 2px;
+    pointer-events: auto;
+    -moz-appearance: textfield;
+  }
+  input.mat-in::-webkit-outer-spin-button,
+  input.mat-in::-webkit-inner-spin-button { -webkit-appearance: none; }
+  input.mat-in:focus { border-bottom-color: #888; }
+  .mat-cell { display: flex; align-items: center; gap: 2px; }
+  .spin-btns { display: flex; flex-direction: column; gap: 1px; }
+  .spin-btn {
+    width: 14px; height: 12px; font-size: 9px; line-height: 1;
+    background: rgba(255,255,255,0.08); color: #888;
+    border: 1px solid #444; border-radius: 3px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    pointer-events: auto; user-select: none;
+  }
+  .spin-btn:hover { background: rgba(255,255,255,0.18); color: #ccc; }
+  .zoom-bar { display: flex; gap: 6px; pointer-events: auto; }
+  .zoom-btn {
+    width: 30px; height: 30px; font-size: 18px;
+    background: rgba(255,255,255,0.07); color: #aaa;
+    border: 1px solid #444; border-radius: 6px;
+    cursor: pointer; line-height: 1;
+  }
+  .vec-label { position: absolute; pointer-events: none; transform: translate(10px, -50%); }
+  input[type=checkbox].vec-toggle { width:14px; height:14px; cursor:pointer; pointer-events:auto; accent-color:#888; }
+  .katex { font-size: 14px; }
+  #eigen-formula .katex,
+  #eigen-formula2 .katex,
+  #eigen-formula3 .katex,
+  #eigen-formula4 .katex,
+  #eigen-formula5 .katex,
+  #eigen-formula6 .katex,
+  #eigen-formula7 .katex,
+  #eigen-formula8 .katex { font-size: 18px; }
+  #eigen-solution .katex { font-size: 18px; }
+  #step1 .katex, #step2 .katex, #step3 .katex,
+  #step1b .katex, #step2b .katex, #step3b .katex { font-size: 20px; }
+</style>
+</head>
+<body>
+
+<div id="system">
+  <div id="drag-handle">
+    <button id="collapse-btn" title="свернуть/развернуть">▼</button>
+  </div>
+  <div id="system-body">
+  <div class="mat-row">
+    <span>A =</span>
+    <div class="mat-wrap">
+      <div class="mat-bracket left"></div>
+      <div class="mat-cells" style="grid-template-columns: auto 1fr auto 1fr;">
+        <span style="color:#e05c3a; font-size:11px; font-family:serif; white-space:nowrap;">t<sub>11</sub>:</span>
+        <input class="mat-in" id="a11" type="number" value="4"  style="color:#e05c3a">
+        <span style="color:#5ca8e0; font-size:11px; font-family:serif; white-space:nowrap;">t<sub>21</sub>:</span>
+        <input class="mat-in" id="a12" type="number" value="1" style="color:#5ca8e0">
+        <span style="color:#e05c3a; font-size:11px; font-family:serif; white-space:nowrap;">t<sub>12</sub>:</span>
+        <input class="mat-in" id="a21" type="number" value="2"  style="color:#e05c3a">
+        <span style="color:#5ca8e0; font-size:11px; font-family:serif; white-space:nowrap;">t<sub>22</sub>:</span>
+        <input class="mat-in" id="a22" type="number" value="3"  style="color:#5ca8e0">
+      </div>
+      <div class="mat-bracket right"></div>
+    </div>
+  </div>
+
+  <div class="mat-row">
+    <div style="display:flex; gap:10px; align-items:center;">
+      <div class="mat-row">
+        <input type="checkbox" class="vec-toggle" id="v1vis" checked>
+        <span style="color:#a0ff80;">v<sub>1</sub> =</span>
+        <div class="mat-wrap">
+          <div class="mat-bracket left"></div>
+          <div class="mat-cells cols1">
+            <input class="mat-in" id="v1x" type="number" value="1" style="color:#a0ff80;">
+            <input class="mat-in" id="v1y" type="number" value="1" style="color:#a0ff80;">
+          </div>
+          <div class="mat-bracket right"></div>
+        </div>
+      </div>
+      <div class="mat-row">
+        <input type="checkbox" class="vec-toggle" id="v2vis" checked>
+        <span style="color:#f0d060;">v<sub>2</sub> =</span>
+        <div class="mat-wrap">
+          <div class="mat-bracket left"></div>
+          <div class="mat-cells cols1">
+            <input class="mat-in" id="v2x" type="number" value="2" style="color:#f0d060;">
+            <input class="mat-in" id="v2y" type="number" value="0" style="color:#f0d060;">
+          </div>
+          <div class="mat-bracket right"></div>
+        </div>
+      </div>
+      <div class="mat-row">
+        <input type="checkbox" class="vec-toggle" id="v3vis" checked>
+        <span style="color:#c080ff;">v<sub>3</sub> =</span>
+        <div class="mat-wrap">
+          <div class="mat-bracket left"></div>
+          <div class="mat-cells cols1">
+            <input class="mat-in" id="v3x" type="number" value="0" style="color:#c080ff;">
+            <input class="mat-in" id="v3y" type="number" value="2" style="color:#c080ff;">
+          </div>
+          <div class="mat-bracket right"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="eigen-formula" style="padding:0 6px;"></div>
+  <div style="font-size:11px; padding:4px 6px; line-height:1.5; max-width:340px; color:#aaa; display:none;">
+    Цель — найти такие <span style="color:#f0d060;">векторы</span> и <span style="color:#c080ff;">скаляры</span>,
+    что трансформация действует как простое <b>растяжение/сжатие</b>:
+    вектор не меняет направление, только длину в <span style="color:#c080ff;">λ</span> раз
+    (если <span style="color:#c080ff;">λ</span>&lt;0 — ещё и разворачивается).
+  </div>
+  <div id="eigen-formula2" style="padding:0 6px;"></div>
+  <div id="eigen-formula3" style="padding:0 6px;"></div>
+  <div id="eigen-formula4" style="padding:0 6px; margin-top:4px;"></div>
+  <div id="eigen-formula5" style="padding:0 6px; margin-top:4px;"></div>
+  <div style="font-size:14px; font-family:serif; padding:0 6px; color:#aaa; margin-top:6px;">находим конкретные значения <span style="color:#c080ff;">λ₁</span> и <span style="color:#c080ff;">λ₂</span>:</div>
+  <div id="eigen-formula6" style="padding:0 6px; margin-top:2px;"></div>
+  <div id="eigen-solution" style="padding:0 6px; margin-top:4px;"></div>
+  <div style="font-size:14px; font-family:serif; padding:0 6px; color:#aaa; margin-top:6px;">находим конкретные координаты векторов <span style="color:#f0d060;">v&#x20D7;₁</span> и <span style="color:#f0d060;">v&#x20D7;₂</span>:</div>
+  <div style="display:flex; gap:0; padding:0 6px; margin-top:8px;">
+    <div style="padding-right:20px; display:flex; flex-direction:column; gap:4px;">
+      <div id="eigen-formula7"></div>
+      <div id="step1"></div>
+      <div id="step2"></div>
+      <div id="step3"></div>
+    </div>
+    <div style="width:1px; background:#444; margin:0 4px; align-self:stretch;"></div>
+    <div style="padding-left:20px; display:flex; flex-direction:column; gap:4px;">
+      <div id="eigen-formula8"></div>
+      <div id="step1b"></div>
+      <div id="step2b"></div>
+      <div id="step3b"></div>
+    </div>
+  </div>
+
+  <div class="zoom-bar">
+    <button class="zoom-btn" id="btn-plus">+</button>
+    <button class="zoom-btn" id="btn-minus">−</button>
+  </div>
+  </div>
+</div>
+
+<div class="panel" id="panel-left">
+  <canvas id="c-left"></canvas>
+</div>
+<div class="panel" id="panel-right">
+  <canvas id="c-right"></canvas>
+</div>
+
+<script>
+const dpr = window.devicePixelRatio || 1;
+let scale = 60, targetScale = 60;
+
+const S = { a11: 4, a12: 1, a21: 2, a22: 3 };
+function col1() { return [S.a11, S.a21]; }
+function col2() { return [S.a12, S.a22]; }
+
+const VS = [
+  { x: 1, y: 1, color: '#a0ff80', visible: true },
+  { x: 2, y: 0, color: '#f0d060', visible: true },
+  { x: 0, y: 2, color: '#c080ff', visible: true },
+];
+function transformed(v) {
+  return [S.a11*v.x + S.a12*v.y, S.a21*v.x + S.a22*v.y];
+}
+
+['a11','a12','a21','a22'].forEach(id => {
+  const inp = document.getElementById(id);
+  S[id] = parseFloat(inp.value) || 0;
+  inp.addEventListener('input', e => {
+    S[id] = parseFloat(e.target.value) || 0;
+    scenes.forEach(s => s.draw());
+    renderEigenSolution();
+    renderEigenStepSolution();
+  });
+
+  const cell = document.createElement('div');
+  cell.className = 'mat-cell';
+  inp.parentNode.insertBefore(cell, inp);
+  cell.appendChild(inp);
+
+  const btns = document.createElement('div');
+  btns.className = 'spin-btns';
+  ['▲','▼'].forEach((arrow, i) => {
+    const b = document.createElement('div');
+    b.className = 'spin-btn';
+    b.textContent = arrow;
+    b.addEventListener('click', () => {
+      inp.value = (parseFloat(inp.value) || 0) + (i === 0 ? 1 : -1);
+      inp.dispatchEvent(new Event('input'));
+    });
+    btns.appendChild(b);
+  });
+  cell.appendChild(btns);
+});
+
+[0,1,2].forEach(i => {
+  const cb = document.getElementById(`v${i+1}vis`);
+  cb.addEventListener('change', () => {
+    VS[i].visible = cb.checked;
+    scenes.forEach(s => s.draw());
+  });
+});
+
+[0,1,2].forEach(i => {
+  ['x','y'].forEach(axis => {
+    const inp = document.getElementById(`v${i+1}${axis}`);
+    VS[i][axis] = parseFloat(inp.value) || 0;
+    inp.addEventListener('input', e => {
+      VS[i][axis] = parseFloat(e.target.value) || 0;
+      scenes.forEach(s => s.draw());
+    });
+
+    const cell = document.createElement('div');
+    cell.className = 'mat-cell';
+    inp.parentNode.insertBefore(cell, inp);
+    cell.appendChild(inp);
+
+    const btns = document.createElement('div');
+    btns.className = 'spin-btns';
+    ['▲','▼'].forEach((arrow, k) => {
+      const b = document.createElement('div');
+      b.className = 'spin-btn';
+      b.textContent = arrow;
+      b.addEventListener('click', () => {
+        inp.value = (parseFloat(inp.value) || 0) + (k === 0 ? 1 : -1);
+        inp.dispatchEvent(new Event('input'));
+      });
+      btns.appendChild(b);
+    });
+    cell.appendChild(btns);
+  });
+});
+
+const scenes = [];
+
+function makeScene(canvasId, panelId, getArrows, showTransGrid) {
+  const canvas = document.getElementById(canvasId);
+  const panel  = document.getElementById(panelId);
+  const ctx    = canvas.getContext('2d');
+  let W, H, cx, cy;
+
+  const labelDivs = Array.from({length: 8}, () => {
+    const div = document.createElement('div');
+    div.className = 'vec-label';
+    div.style.display = 'none';
+    panel.appendChild(div);
+    return div;
+  });
+
+  function toScreen(x, y) { return [cx + x * scale, cy - y * scale]; }
+
+  function drawArrow(x2, y2, color) {
+    const [sx1, sy1] = toScreen(0, 0);
+    const [sx2, sy2] = toScreen(x2, y2);
+    if (sx1 === sx2 && sy1 === sy2) return;
+    const angle = Math.atan2(sy2 - sy1, sx2 - sx1);
+    const hl = 12;
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(sx1, sy1); ctx.lineTo(sx2, sy2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(sx2, sy2);
+    ctx.lineTo(sx2 - hl * Math.cos(angle - 0.4), sy2 - hl * Math.sin(angle - 0.4));
+    ctx.lineTo(sx2 - hl * Math.cos(angle + 0.4), sy2 - hl * Math.sin(angle + 0.4));
+    ctx.closePath(); ctx.fill();
+  }
+
+  function drawGrid() {
+    ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 1;
+    const rx = Math.ceil(W / 2 / scale) + 1;
+    const ry = Math.ceil(H / 2 / scale) + 1;
+    for (let i = -rx; i <= rx; i++) {
+      const [x] = toScreen(i, 0);
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    }
+    for (let i = -ry; i <= ry; i++) {
+      const [, y] = toScreen(0, i);
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    }
+  }
+
+  function drawAxes() {
+    ctx.strokeStyle = '#555'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(W, cy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, H); ctx.stroke();
+    ctx.fillStyle = '#555'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+    const rx = Math.ceil(W / 2 / scale), ry = Math.ceil(H / 2 / scale);
+    for (let i = -rx; i <= rx; i++) {
+      if (!i) continue;
+      const [x] = toScreen(i, 0); ctx.fillText(i, x, cy + 16);
+    }
+    ctx.textAlign = 'right';
+    for (let i = -ry; i <= ry; i++) {
+      if (!i) continue;
+      const [, y] = toScreen(0, i); ctx.fillText(i, cx - 6, y + 4);
+    }
+    ctx.fillStyle = '#777'; ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'left';   ctx.fillText('x', W - 20, cy - 10);
+    ctx.textAlign = 'center'; ctx.fillText('y', cx + 14, 18);
+  }
+
+  function drawTransformedGrid() {
+    const [c1x, c1y] = col1(), [c2x, c2y] = col2();
+    const range = 20, t = 30;
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(224,92,58,0.35)';
+    for (let n = -range; n <= range; n++) {
+      const px = n*c2x, py = n*c2y;
+      const [sx1,sy1] = toScreen(px - c1x*t, py - c1y*t);
+      const [sx2,sy2] = toScreen(px + c1x*t, py + c1y*t);
+      ctx.beginPath(); ctx.moveTo(sx1,sy1); ctx.lineTo(sx2,sy2); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(92,168,224,0.35)';
+    for (let n = -range; n <= range; n++) {
+      const px = n*c1x, py = n*c1y;
+      const [sx1,sy1] = toScreen(px - c2x*t, py - c2y*t);
+      const [sx2,sy2] = toScreen(px + c2x*t, py + c2y*t);
+      ctx.beginPath(); ctx.moveTo(sx1,sy1); ctx.lineTo(sx2,sy2); ctx.stroke();
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    drawGrid(); drawAxes();
+    if (showTransGrid) drawTransformedGrid();
+
+    const arrows = getArrows();
+    labelDivs.forEach((d, i) => {
+      if (i < arrows.length) {
+        d.style.display = '';
+        d.style.color = arrows[i].color;
+        if (d.dataset.tex !== arrows[i].tex) {
+          if (window.katex) {
+            katex.render(arrows[i].tex, d, { throwOnError: false });
+            d.dataset.tex = arrows[i].tex;
+          }
+        }
+        drawArrow(arrows[i].x, arrows[i].y, arrows[i].color);
+        const [sx, sy] = toScreen(arrows[i].x, arrows[i].y);
+        d.style.left = sx + 'px'; d.style.top = sy + 'px';
+      } else {
+        d.style.display = 'none';
+      }
+    });
+  }
+
+  function resize() {
+    W = Math.floor(window.innerWidth / 2); H = window.innerHeight;
+    canvas.style.width = W+'px'; canvas.style.height = H+'px';
+    canvas.width = W*dpr; canvas.height = H*dpr;
+    ctx.scale(dpr, dpr);
+    cx = W/2; cy = H/2;
+    draw();
+  }
+
+  scenes.push({ draw, resize });
+  window.addEventListener('resize', resize);
+  resize();
+}
+
+// left: standard basis + original vectors
+makeScene('c-left', 'panel-left',
+  () => [
+    { x: 1, y: 0, color: '#e05c3a', tex: '\\hat{i}' },
+    { x: 0, y: 1, color: '#5ca8e0', tex: '\\hat{j}' },
+    ...VS.filter(v => v.visible).map(v => ({ x: v.x, y: v.y, color: v.color, tex: `\\begin{pmatrix}${v.x}\\\\${v.y}\\end{pmatrix}` })),
+  ],
+  false
+);
+
+// right: transformed space + transformed vectors
+makeScene('c-right', 'panel-right',
+  () => {
+    const [c1x, c1y] = col1(), [c2x, c2y] = col2();
+    return [
+      { x: c1x, y: c1y, color: '#e05c3a', tex: `\\begin{pmatrix}${c1x}\\\\${c1y}\\end{pmatrix}` },
+      { x: c2x, y: c2y, color: '#5ca8e0', tex: `\\begin{pmatrix}${c2x}\\\\${c2y}\\end{pmatrix}` },
+      ...VS.filter(v => v.visible).map(v => {
+        const [tx, ty] = transformed(v);
+        return { x: tx, y: ty, color: v.color, tex: `\\begin{pmatrix}${tx}\\\\${ty}\\end{pmatrix}` };
+      }),
+    ];
+  },
+  true
+);
+
+// drag the system panel via top handle
+(() => {
+  const panel  = document.getElementById('system');
+  const handle = document.getElementById('drag-handle');
+  let dragging = false, dx = 0, dy = 0;
+  handle.addEventListener('mousedown', e => {
+    dragging = true;
+    const rect = panel.getBoundingClientRect();
+    dx = e.clientX - rect.left; dy = e.clientY - rect.top;
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    panel.style.left = (e.clientX - dx) + 'px';
+    panel.style.top  = (e.clientY - dy) + 'px';
+  });
+  window.addEventListener('mouseup', () => { dragging = false; });
+})();
+
+(() => {
+  const panel = document.getElementById('system');
+  const btn   = document.getElementById('collapse-btn');
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const collapsed = panel.classList.toggle('collapsed');
+    btn.textContent = collapsed ? '▶' : '▼';
+  });
+})();
+
+function renderEigenFormula() {
+  if (!window.katex) return;
+  katex.render(
+    `A\\vec{\\textcolor{#f0d060}{v}} = \\textcolor{#c080ff}{\\lambda}\\vec{\\textcolor{#f0d060}{v}}`,
+    document.getElementById('eigen-formula'),
+    { throwOnError: false }
+  );
+  katex.render(
+    `A\\vec{\\textcolor{#f0d060}{v}} = (\\textcolor{#c080ff}{\\lambda} E)\\vec{\\textcolor{#f0d060}{v}}`,
+    document.getElementById('eigen-formula2'),
+    { throwOnError: false }
+  );
+  katex.render(
+    `(A - \\textcolor{#c080ff}{\\lambda} E)\\vec{\\textcolor{#f0d060}{v}} = \\vec{0}`,
+    document.getElementById('eigen-formula3'),
+    { throwOnError: false }
+  );
+  katex.render(
+    `\\det(A - \\textcolor{#c080ff}{\\lambda} E) = 0`,
+    document.getElementById('eigen-formula4'),
+    { throwOnError: false }
+  );
+  katex.render(
+    `\\det\\begin{pmatrix} \\textcolor{#e05c3a}{t_{11}} - \\textcolor{#c080ff}{\\lambda} & \\textcolor{#5ca8e0}{t_{21}} \\\\ \\textcolor{#e05c3a}{t_{12}} & \\textcolor{#5ca8e0}{t_{22}} - \\textcolor{#c080ff}{\\lambda} \\end{pmatrix} = 0`,
+    document.getElementById('eigen-formula5'),
+    { throwOnError: false }
+  );
+  katex.render(
+    `(\\textcolor{#e05c3a}{t_{11}} - \\textcolor{#c080ff}{\\lambda_1})(\\textcolor{#5ca8e0}{t_{22}} - \\textcolor{#c080ff}{\\lambda_2}) - \\textcolor{#5ca8e0}{t_{21}}\\textcolor{#e05c3a}{t_{12}} = 0`,
+    document.getElementById('eigen-formula6'),
+    { throwOnError: false }
+  );
+  renderEigenSolution();
+  renderEigenStepSolution();
+  katex.render(
+    `\\begin{pmatrix} \\textcolor{#e05c3a}{t_{11}} - \\textcolor{#c080ff}{\\lambda_1} & \\textcolor{#5ca8e0}{t_{21}} \\\\ \\textcolor{#e05c3a}{t_{12}} & \\textcolor{#5ca8e0}{t_{22}} - \\textcolor{#c080ff}{\\lambda_1} \\end{pmatrix} \\begin{pmatrix} \\textcolor{#f0d060}{v_{11}} \\\\ \\textcolor{#f0d060}{v_{12}} \\end{pmatrix} = \\begin{pmatrix} 0 \\\\ 0 \\end{pmatrix}`,
+    document.getElementById('eigen-formula7'),
+    { throwOnError: false }
+  );
+  katex.render(
+    `\\begin{pmatrix} \\textcolor{#e05c3a}{t_{11}} - \\textcolor{#c080ff}{\\lambda_2} & \\textcolor{#5ca8e0}{t_{21}} \\\\ \\textcolor{#e05c3a}{t_{12}} & \\textcolor{#5ca8e0}{t_{22}} - \\textcolor{#c080ff}{\\lambda_2} \\end{pmatrix} \\begin{pmatrix} \\textcolor{#f0d060}{v_{21}} \\\\ \\textcolor{#f0d060}{v_{22}} \\end{pmatrix} = \\begin{pmatrix} 0 \\\\ 0 \\end{pmatrix}`,
+    document.getElementById('eigen-formula8'),
+    { throwOnError: false }
+  );
+}
+
+function renderEigenStepSolution() {
+  const el1 = document.getElementById('step1');
+  const el2 = document.getElementById('step2');
+  const el3 = document.getElementById('step3');
+  if (!el1 || !window.katex) return;
+  const tr = S.a11 + S.a22;
+  const det = S.a11 * S.a22 - S.a12 * S.a21;
+  const disc = tr * tr - 4 * det;
+  if (disc < 0) { [el1, el2, el3].forEach(e => e.textContent = ''); return; }
+
+  const fmt = n => { const r = Math.round(n * 1000) / 1000; return Number.isInteger(r) ? r.toString() : r.toFixed(2); };
+  const l1 = (tr + Math.sqrt(disc)) / 2;
+  const a = Math.round((S.a11 - l1) * 1000) / 1000;
+  const b = S.a12;
+  const c = S.a21;
+  const d = Math.round((S.a22 - l1) * 1000) / 1000;
+
+  // step 1: λ₁ → substituted matrix · v = 0
+  katex.render(
+    `\\textcolor{#c080ff}{\\lambda_1} = ${fmt(l1)} \\Rightarrow \\begin{pmatrix} ${fmt(a)} & ${fmt(b)} \\\\ ${fmt(c)} & ${fmt(d)} \\end{pmatrix} \\begin{pmatrix} \\textcolor{#f0d060}{v_{11}} \\\\ \\textcolor{#f0d060}{v_{12}} \\end{pmatrix} = \\begin{pmatrix} 0 \\\\ 0 \\end{pmatrix}`,
+    el1, { throwOnError: false }
+  );
+
+  // step 2: first row equation
+  const t2 = b < 0 ? `- ${fmt(-b)} \\cdot \\textcolor{#f0d060}{v_{12}}` : `+ ${fmt(b)} \\cdot \\textcolor{#f0d060}{v_{12}}`;
+  katex.render(
+    `${fmt(a)} \\cdot \\textcolor{#f0d060}{v_{11}} ${t2} = 0`,
+    el2, { throwOnError: false }
+  );
+
+  // step 3: solution — v = (b, -a) normalized
+  let v1 = b, v2 = -a;
+  if (v1 < -1e-9 || (Math.abs(v1) < 1e-9 && v2 < -1e-9)) { v1 = -v1; v2 = -v2; }
+  katex.render(
+    `\\textcolor{#f0d060}{\\vec{v}_1} = \\begin{pmatrix} ${fmt(v1)} \\\\ ${fmt(v2)} \\end{pmatrix}`,
+    el3, { throwOnError: false }
+  );
+
+  // --- λ₂ side ---
+  const el1b = document.getElementById('step1b');
+  const el2b = document.getElementById('step2b');
+  const el3b = document.getElementById('step3b');
+  if (!el1b) return;
+  const l2 = (tr - Math.sqrt(disc)) / 2;
+  const a2 = Math.round((S.a11 - l2) * 1000) / 1000;
+  const d2 = Math.round((S.a22 - l2) * 1000) / 1000;
+
+  katex.render(
+    `\\textcolor{#c080ff}{\\lambda_2} = ${fmt(l2)} \\Rightarrow \\begin{pmatrix} ${fmt(a2)} & ${fmt(b)} \\\\ ${fmt(c)} & ${fmt(d2)} \\end{pmatrix} \\begin{pmatrix} \\textcolor{#f0d060}{v_{21}} \\\\ \\textcolor{#f0d060}{v_{22}} \\end{pmatrix} = \\begin{pmatrix} 0 \\\\ 0 \\end{pmatrix}`,
+    el1b, { throwOnError: false }
+  );
+
+  const t2b = b < 0 ? `- ${fmt(-b)} \\cdot \\textcolor{#f0d060}{v_{22}}` : `+ ${fmt(b)} \\cdot \\textcolor{#f0d060}{v_{22}}`;
+  katex.render(
+    `${fmt(a2)} \\cdot \\textcolor{#f0d060}{v_{21}} ${t2b} = 0`,
+    el2b, { throwOnError: false }
+  );
+
+  let w1 = b, w2 = -a2;
+  if (w1 < -1e-9 || (Math.abs(w1) < 1e-9 && w2 < -1e-9)) { w1 = -w1; w2 = -w2; }
+  katex.render(
+    `\\textcolor{#f0d060}{\\vec{v}_2} = \\begin{pmatrix} ${fmt(w1)} \\\\ ${fmt(w2)} \\end{pmatrix}`,
+    el3b, { throwOnError: false }
+  );
+}
+
+function renderEigenSolution() {
+  const el = document.getElementById('eigen-solution');
+  if (!el || !window.katex) return;
+  const tr = S.a11 + S.a22;
+  const det = S.a11 * S.a22 - S.a12 * S.a21;
+  const disc = tr * tr - 4 * det;
+  const fmt = n => Math.abs(n - Math.round(n)) < 0.0001 ? Math.round(n).toString() : n.toFixed(2);
+
+  let tex = `\\textcolor{#c080ff}{\\lambda}^2`;
+  if (tr > 0) tex += ` - ${tr}\\textcolor{#c080ff}{\\lambda}`;
+  else if (tr < 0) tex += ` + ${-tr}\\textcolor{#c080ff}{\\lambda}`;
+  if (det > 0) tex += ` + ${det}`;
+  else if (det < 0) tex += ` - ${-det}`;
+  tex += ` = 0`;
+
+  if (disc < 0) {
+    tex += `\\;\\Rightarrow\\; \\text{no real roots}`;
+  } else if (disc === 0) {
+    tex += `\\;\\Rightarrow\\; \\textcolor{#c080ff}{\\lambda_1} = \\textcolor{#c080ff}{\\lambda_2} = ${fmt(tr / 2)}`;
+  } else {
+    const l1 = (tr + Math.sqrt(disc)) / 2;
+    const l2 = (tr - Math.sqrt(disc)) / 2;
+    tex += `\\;\\Rightarrow\\; \\textcolor{#c080ff}{\\lambda_1} \\approx ${fmt(l1)},\\;\\textcolor{#c080ff}{\\lambda_2} \\approx ${fmt(l2)}`;
+  }
+  katex.render(tex, el, { throwOnError: false });
+}
+
+document.getElementById('btn-plus').addEventListener('click',  () => { targetScale *= 1.4; });
+document.getElementById('btn-minus').addEventListener('click', () => { targetScale *= 0.7; });
+
+function animate() {
+  if (Math.abs(targetScale - scale) > 0.2) {
+    scale += (targetScale - scale) * 0.12;
+    scenes.forEach(s => s.draw());
+  }
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body>
+</html>
