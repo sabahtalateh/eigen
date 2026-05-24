@@ -507,7 +507,7 @@ makeScene('c-right', 'panel-right',
   }
 
   handle.addEventListener('mousedown', e => { overlayStart(e.clientX, e.clientY); e.preventDefault(); });
-  handle.addEventListener('touchstart', e => { if (e.touches.length === 1) { overlayStart(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); } }, { passive: false });
+  handle.addEventListener('touchstart', e => { if (e.touches.length === 1 && e.target !== btn) { overlayStart(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); } }, { passive: false });
 
   window.addEventListener('mousemove', e => overlayMove(e.clientX, e.clientY));
   window.addEventListener('mouseup', () => { dragging = false; });
