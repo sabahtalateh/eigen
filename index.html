@@ -507,7 +507,6 @@ makeScene('c-right', 'panel-right',
   }
 
   handle.addEventListener('mousedown', e => { overlayStart(e.clientX, e.clientY); e.preventDefault(); });
-  btn.addEventListener('touchstart', e => { e.stopPropagation(); });
   handle.addEventListener('touchstart', e => { if (e.touches.length === 1) { overlayStart(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); } }, { passive: false });
 
   window.addEventListener('mousemove', e => overlayMove(e.clientX, e.clientY));
@@ -527,6 +526,7 @@ makeScene('c-right', 'panel-right',
     btn.textContent = '▼';
   }
 
+  btn.addEventListener('touchstart', e => { e.stopPropagation(); });
   btn.addEventListener('click', e => {
     e.stopPropagation();
     const collapsed = panel.classList.toggle('collapsed');
