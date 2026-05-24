@@ -114,13 +114,14 @@
   #eigen-solution .katex { font-size: 18px; }
   #step1 .katex, #step2 .katex, #step3 .katex,
   #step1b .katex, #step2b .katex, #step3b .katex { font-size: 20px; }
+  #diag-formula .katex, #diag-pd .katex, #diag-dn .katex { font-size: 20px; }
 </style>
 </head>
 <body>
 
-<div id="system">
+<div id="system" class="collapsed">
   <div id="drag-handle">
-    <button id="collapse-btn" title="свернуть/развернуть">▼</button>
+    <button id="collapse-btn" title="свернуть/развернуть">▶</button>
   </div>
   <div id="system-body">
   <div class="mat-row">
@@ -161,14 +162,14 @@
         <div class="mat-wrap">
           <div class="mat-bracket left"></div>
           <div class="mat-cells cols1">
-            <input class="mat-in" id="v2x" type="number" value="2" style="color:#f0d060;">
-            <input class="mat-in" id="v2y" type="number" value="0" style="color:#f0d060;">
+            <input class="mat-in" id="v2x" type="number" value="1" style="color:#f0d060;">
+            <input class="mat-in" id="v2y" type="number" value="-2" style="color:#f0d060;">
           </div>
           <div class="mat-bracket right"></div>
         </div>
       </div>
       <div class="mat-row">
-        <input type="checkbox" class="vec-toggle" id="v3vis" checked>
+        <input type="checkbox" class="vec-toggle" id="v3vis">
         <span style="color:#c080ff;">v<sub>3</sub> =</span>
         <div class="mat-wrap">
           <div class="mat-bracket left"></div>
@@ -213,6 +214,20 @@
     </div>
   </div>
 
+  <div style="border-top:1px solid #333; margin: 8px 6px 0;"></div>
+  <div style="font-size:14px; font-family:serif; padding:0 6px; color:#ccc; margin-top:6px;">диагонализация</div>
+  <div id="diag-formula" style="padding:0 6px; margin-top:4px;"></div>
+  <div style="font-size:12px; font-family:serif; padding:0 6px; color:#aaa; margin-top:2px; line-height:1.6;">
+    P — столбцы из <span style="color:#f0d060;">v⃗₁, v⃗₂</span> &nbsp;|&nbsp; D — <span style="color:#c080ff;">λ₁, λ₂</span> на диагонали
+  </div>
+  <div id="diag-derive" style="padding:0 6px; margin-top:8px;"></div>
+  <div id="diag-pd" style="padding:0 6px; margin-top:6px;"></div>
+  <div style="font-size:12px; font-family:serif; padding:0 6px; color:#aaa; margin-top:8px; line-height:1.6;">
+    зачем: степень матрицы A<sup>n</sup> = P·D<sup>n</sup>·P<sup>-1</sup>, а D<sup>n</sup> — просто λ<sup>n</sup> на диагонали:
+  </div>
+  <div id="diag-dn" style="padding:0 6px; margin-top:4px;"></div>
+  <div id="diag-pow" style="padding:0 6px; margin-top:8px;"></div>
+
   <div class="zoom-bar">
     <button class="zoom-btn" id="btn-plus">+</button>
     <button class="zoom-btn" id="btn-minus">−</button>
@@ -230,6 +245,7 @@
 <script>
 const dpr = window.devicePixelRatio || 1;
 let scale = 60, targetScale = 60;
+let panX = 0, panY = 0;
 
 const S = { a11: 4, a12: 1, a21: 2, a22: 3 };
 function col1() { return [S.a11, S.a21]; }
@@ -237,8 +253,8 @@ function col2() { return [S.a12, S.a22]; }
 
 const VS = [
   { x: 1, y: 1, color: '#a0ff80', visible: true },
-  { x: 2, y: 0, color: '#f0d060', visible: true },
-  { x: 0, y: 2, color: '#c080ff', visible: true },
+  { x: 1, y: -2, color: '#f0d060', visible: true },
+  { x: 0, y: 2, color: '#c080ff', visible: false },
 ];
 function transformed(v) {
   return [S.a11*v.x + S.a12*v.y, S.a21*v.x + S.a22*v.y];
@@ -252,6 +268,7 @@ function transformed(v) {
     scenes.forEach(s => s.draw());
     renderEigenSolution();
     renderEigenStepSolution();
+    renderDiag();
   });
 
   const cell = document.createElement('div');
@@ -328,7 +345,7 @@ function makeScene(canvasId, panelId, getArrows, showTransGrid) {
     return div;
   });
 
-  function toScreen(x, y) { return [cx + x * scale, cy - y * scale]; }
+  function toScreen(x, y) { return [cx + x * scale + panX, cy - y * scale + panY]; }
 
   function drawArrow(x2, y2, color) {
     const [sx1, sy1] = toScreen(0, 0);
@@ -347,36 +364,43 @@ function makeScene(canvasId, panelId, getArrows, showTransGrid) {
 
   function drawGrid() {
     ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 1;
-    const rx = Math.ceil(W / 2 / scale) + 1;
-    const ry = Math.ceil(H / 2 / scale) + 1;
-    for (let i = -rx; i <= rx; i++) {
+    const xMin = Math.floor((-cx - panX) / scale) - 1;
+    const xMax = Math.ceil((W - cx - panX) / scale) + 1;
+    const yMin = Math.floor((cy + panY - H) / scale) - 1;
+    const yMax = Math.ceil((cy + panY) / scale) + 1;
+    for (let i = xMin; i <= xMax; i++) {
       const [x] = toScreen(i, 0);
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
     }
-    for (let i = -ry; i <= ry; i++) {
+    for (let i = yMin; i <= yMax; i++) {
       const [, y] = toScreen(0, i);
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
     }
   }
 
   function drawAxes() {
+    const [ox, oy] = toScreen(0, 0);
     ctx.strokeStyle = '#555'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(W, cy); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, H); ctx.stroke();
-    ctx.fillStyle = '#555'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
-    const rx = Math.ceil(W / 2 / scale), ry = Math.ceil(H / 2 / scale);
-    for (let i = -rx; i <= rx; i++) {
+    ctx.beginPath(); ctx.moveTo(0, oy); ctx.lineTo(W, oy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ox, 0); ctx.lineTo(ox, H); ctx.stroke();
+    ctx.fillStyle = '#555'; ctx.font = '12px sans-serif';
+    const xMin = Math.floor((-cx - panX) / scale) - 1;
+    const xMax = Math.ceil((W - cx - panX) / scale) + 1;
+    const yMin = Math.floor((cy + panY - H) / scale) - 1;
+    const yMax = Math.ceil((cy + panY) / scale) + 1;
+    ctx.textAlign = 'center';
+    for (let i = xMin; i <= xMax; i++) {
       if (!i) continue;
-      const [x] = toScreen(i, 0); ctx.fillText(i, x, cy + 16);
+      const [x] = toScreen(i, 0); ctx.fillText(i, x, oy + 16);
     }
     ctx.textAlign = 'right';
-    for (let i = -ry; i <= ry; i++) {
+    for (let i = yMin; i <= yMax; i++) {
       if (!i) continue;
-      const [, y] = toScreen(0, i); ctx.fillText(i, cx - 6, y + 4);
+      const [, y] = toScreen(0, i); ctx.fillText(i, ox - 6, y + 4);
     }
     ctx.fillStyle = '#777'; ctx.font = 'bold 14px sans-serif';
-    ctx.textAlign = 'left';   ctx.fillText('x', W - 20, cy - 10);
-    ctx.textAlign = 'center'; ctx.fillText('y', cx + 14, 18);
+    ctx.textAlign = 'left';   ctx.fillText('x', W - 20, oy - 10);
+    ctx.textAlign = 'center'; ctx.fillText('y', ox + 14, 18);
   }
 
   function drawTransformedGrid() {
@@ -477,8 +501,10 @@ makeScene('c-right', 'panel-right',
   });
   window.addEventListener('mousemove', e => {
     if (!dragging) return;
-    panel.style.left = (e.clientX - dx) + 'px';
-    panel.style.top  = (e.clientY - dy) + 'px';
+    const x = Math.min(Math.max(0, e.clientX - dx), window.innerWidth  - panel.offsetWidth);
+    const y = Math.min(Math.max(0, e.clientY - dy), window.innerHeight - panel.offsetHeight);
+    panel.style.left = x + 'px';
+    panel.style.top  = y + 'px';
   });
   window.addEventListener('mouseup', () => { dragging = false; });
 })();
@@ -486,10 +512,19 @@ makeScene('c-right', 'panel-right',
 (() => {
   const panel = document.getElementById('system');
   const btn   = document.getElementById('collapse-btn');
+  const KEY   = 'eigen_overlay_collapsed';
+
+  const saved = localStorage.getItem(KEY);
+  if (saved === 'false') {
+    panel.classList.remove('collapsed');
+    btn.textContent = '▼';
+  }
+
   btn.addEventListener('click', e => {
     e.stopPropagation();
     const collapsed = panel.classList.toggle('collapsed');
     btn.textContent = collapsed ? '▶' : '▼';
+    localStorage.setItem(KEY, collapsed);
   });
 })();
 
@@ -527,6 +562,7 @@ function renderEigenFormula() {
   );
   renderEigenSolution();
   renderEigenStepSolution();
+  renderDiag();
   katex.render(
     `\\begin{pmatrix} \\textcolor{#e05c3a}{t_{11}} - \\textcolor{#c080ff}{\\lambda_1} & \\textcolor{#5ca8e0}{t_{21}} \\\\ \\textcolor{#e05c3a}{t_{12}} & \\textcolor{#5ca8e0}{t_{22}} - \\textcolor{#c080ff}{\\lambda_1} \\end{pmatrix} \\begin{pmatrix} \\textcolor{#f0d060}{v_{11}} \\\\ \\textcolor{#f0d060}{v_{12}} \\end{pmatrix} = \\begin{pmatrix} 0 \\\\ 0 \\end{pmatrix}`,
     document.getElementById('eigen-formula7'),
@@ -536,6 +572,70 @@ function renderEigenFormula() {
     `\\begin{pmatrix} \\textcolor{#e05c3a}{t_{11}} - \\textcolor{#c080ff}{\\lambda_2} & \\textcolor{#5ca8e0}{t_{21}} \\\\ \\textcolor{#e05c3a}{t_{12}} & \\textcolor{#5ca8e0}{t_{22}} - \\textcolor{#c080ff}{\\lambda_2} \\end{pmatrix} \\begin{pmatrix} \\textcolor{#f0d060}{v_{21}} \\\\ \\textcolor{#f0d060}{v_{22}} \\end{pmatrix} = \\begin{pmatrix} 0 \\\\ 0 \\end{pmatrix}`,
     document.getElementById('eigen-formula8'),
     { throwOnError: false }
+  );
+}
+
+function renderDiag() {
+  if (!window.katex) return;
+  const tr = S.a11 + S.a22;
+  const det = S.a11 * S.a22 - S.a12 * S.a21;
+  const disc = tr * tr - 4 * det;
+  const elF = document.getElementById('diag-formula');
+  const elPD = document.getElementById('diag-pd');
+  const elDn = document.getElementById('diag-dn');
+  if (!elF) return;
+
+  katex.render(`A = P \\cdot D \\cdot P^{-1} \\quad\\Longleftrightarrow\\quad P^{-1} \\cdot A \\cdot P = D`, elF, { throwOnError: false });
+
+  const elDeriv = document.getElementById('diag-derive');
+  if (elDeriv) {
+    const v = s => `\\textcolor{#f0d060}{${s}}`;
+    const lm = s => `\\textcolor{#c080ff}{${s}}`;
+    katex.render(
+      `\\begin{aligned}`+
+      `&\\text{из определения:}\\\\`+
+      `&A${v('\\vec{v}_1')} = ${lm('\\lambda_1')}${v('\\vec{v}_1')},\\quad A${v('\\vec{v}_2')} = ${lm('\\lambda_2')}${v('\\vec{v}_2')}\\\\[6pt]`+
+      `&\\text{пакуем столбцами:}\\\\`+
+      `&A\\underbrace{[${v('\\vec{v}_1')}|${v('\\vec{v}_2')}]}_{P} = [${lm('\\lambda_1')}${v('\\vec{v}_1')}|${lm('\\lambda_2')}${v('\\vec{v}_2')}]\\\\[4pt]`+
+      `&\\phantom{A\\underbrace{[${v('\\vec{v}_1')}|${v('\\vec{v}_2')}]}_{P}}= \\underbrace{[${v('\\vec{v}_1')}|${v('\\vec{v}_2')}]}_{P}\\underbrace{\\begin{pmatrix}${lm('\\lambda_1')}&0\\\\0&${lm('\\lambda_2')}\\end{pmatrix}}_{D}\\\\[6pt]`+
+      `&AP = PD \\;\\Rightarrow\\; A = PDP^{-1}`+
+      `\\end{aligned}`,
+      elDeriv, { throwOnError: false }
+    );
+  }
+
+  if (disc < 0) { elPD.textContent = ''; elDn.textContent = ''; return; }
+
+  const fmt = n => { const r = Math.round(n * 1000) / 1000; return Number.isInteger(r) ? r.toString() : r.toFixed(2); };
+  const l1 = (tr + Math.sqrt(disc)) / 2;
+  const l2 = (tr - Math.sqrt(disc)) / 2;
+
+  let v1 = S.a12, v2 = -(S.a11 - l1);
+  if (v1 < -1e-9 || (Math.abs(v1) < 1e-9 && v2 < -1e-9)) { v1 = -v1; v2 = -v2; }
+  let w1 = S.a12, w2 = -(S.a11 - l2);
+  if (w1 < -1e-9 || (Math.abs(w1) < 1e-9 && w2 < -1e-9)) { w1 = -w1; w2 = -w2; }
+
+  katex.render(
+    `P = \\begin{pmatrix} ${fmt(v1)} & ${fmt(w1)} \\\\ ${fmt(v2)} & ${fmt(w2)} \\end{pmatrix} \\quad D = \\begin{pmatrix} \\textcolor{#c080ff}{${fmt(l1)}} & 0 \\\\ 0 & \\textcolor{#c080ff}{${fmt(l2)}} \\end{pmatrix}`,
+    elPD, { throwOnError: false }
+  );
+  katex.render(
+    `D^n = \\begin{pmatrix} \\textcolor{#c080ff}{${fmt(l1)}}^n & 0 \\\\ 0 & \\textcolor{#c080ff}{${fmt(l2)}}^n \\end{pmatrix}`,
+    elDn, { throwOnError: false }
+  );
+
+  const elPow = document.getElementById('diag-pow');
+  if (elPow) katex.render(
+    `\\begin{aligned}`+
+    `A^2 &= PDP^{-1}\\cdot PDP^{-1}\\\\`+
+    `&= PD\\underbrace{P^{-1}P}_{I}DP^{-1}\\\\`+
+    `&= PD^2P^{-1}\\\\[6pt]`+
+    `A^3 &= PDP^{-1}\\cdot PDP^{-1}\\cdot PDP^{-1}\\\\`+
+    `&= PD\\underbrace{P^{-1}P}_{I}D\\underbrace{P^{-1}P}_{I}DP^{-1}\\\\`+
+    `&= PD^3P^{-1}\\\\[6pt]`+
+    `A^n &= PD^nP^{-1}`+
+    `\\end{aligned}`,
+    elPow, { throwOnError: false }
   );
 }
 
@@ -630,6 +730,32 @@ function renderEigenSolution() {
     tex += `\\;\\Rightarrow\\; \\textcolor{#c080ff}{\\lambda_1} \\approx ${fmt(l1)},\\;\\textcolor{#c080ff}{\\lambda_2} \\approx ${fmt(l2)}`;
   }
   katex.render(tex, el, { throwOnError: false });
+}
+
+{
+  let dragging = false, startX = 0, startY = 0, startPanX = 0, startPanY = 0;
+  ['c-left', 'c-right'].forEach(id => {
+    const cv = document.getElementById(id);
+    cv.style.cursor = 'grab';
+    cv.addEventListener('mousedown', e => {
+      dragging = true;
+      startX = e.clientX; startY = e.clientY;
+      startPanX = panX; startPanY = panY;
+      cv.style.cursor = 'grabbing';
+      e.preventDefault();
+    });
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    panX = startPanX + (e.clientX - startX);
+    panY = startPanY + (e.clientY - startY);
+    scenes.forEach(s => s.draw());
+  });
+  window.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    ['c-left','c-right'].forEach(id => document.getElementById(id).style.cursor = 'grab');
+  });
 }
 
 document.getElementById('btn-plus').addEventListener('click',  () => { targetScale *= 1.4; });
