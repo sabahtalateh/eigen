@@ -492,16 +492,17 @@ makeScene('c-right', 'panel-right',
 (() => {
   const panel  = document.getElementById('system');
   const handle = document.getElementById('drag-handle');
-  let dragging = false, dx = 0, dy = 0;
+  let dragging = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
   function overlayStart(clientX, clientY) {
     dragging = true;
+    startX = clientX; startY = clientY;
     const rect = panel.getBoundingClientRect();
-    dx = clientX - rect.left; dy = clientY - rect.top;
+    startLeft = rect.left; startTop = rect.top;
   }
   function overlayMove(clientX, clientY) {
     if (!dragging) return;
-    const x = Math.min(Math.max(0, clientX - dx), window.innerWidth  - panel.offsetWidth);
-    const y = Math.min(Math.max(0, clientY - dy), window.innerHeight - panel.offsetHeight);
+    const x = Math.min(Math.max(0, startLeft + (clientX - startX)), window.innerWidth  - panel.offsetWidth);
+    const y = Math.min(Math.max(0, startTop  + (clientY - startY)), window.innerHeight - panel.offsetHeight);
     panel.style.left = x + 'px';
     panel.style.top  = y + 'px';
   }
