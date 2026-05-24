@@ -501,8 +501,10 @@ makeScene('c-right', 'panel-right',
   }
   function overlayMove(clientX, clientY) {
     if (!dragging) return;
-    const x = Math.min(Math.max(0, startLeft + (clientX - startX)), window.innerWidth  - panel.offsetWidth);
-    const y = Math.min(Math.max(0, startTop  + (clientY - startY)), window.innerHeight - panel.offsetHeight);
+    const maxX = Math.max(0, window.innerWidth  - panel.offsetWidth);
+    const maxY = Math.max(0, window.innerHeight - panel.offsetHeight);
+    const x = Math.min(Math.max(0, startLeft + (clientX - startX)), maxX);
+    const y = Math.min(Math.max(0, startTop  + (clientY - startY)), maxY);
     panel.style.left = x + 'px';
     panel.style.top  = y + 'px';
   }
