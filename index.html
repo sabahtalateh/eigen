@@ -493,20 +493,26 @@ makeScene('c-right', 'panel-right',
   const panel  = document.getElementById('system');
   const handle = document.getElementById('drag-handle');
   let dragging = false, dx = 0, dy = 0;
-  handle.addEventListener('mousedown', e => {
+  function overlayStart(clientX, clientY) {
     dragging = true;
     const rect = panel.getBoundingClientRect();
-    dx = e.clientX - rect.left; dy = e.clientY - rect.top;
-    e.preventDefault();
-  });
-  window.addEventListener('mousemove', e => {
+    dx = clientX - rect.left; dy = clientY - rect.top;
+  }
+  function overlayMove(clientX, clientY) {
     if (!dragging) return;
-    const x = Math.min(Math.max(0, e.clientX - dx), window.innerWidth  - panel.offsetWidth);
-    const y = Math.min(Math.max(0, e.clientY - dy), window.innerHeight - panel.offsetHeight);
+    const x = Math.min(Math.max(0, clientX - dx), window.innerWidth  - panel.offsetWidth);
+    const y = Math.min(Math.max(0, clientY - dy), window.innerHeight - panel.offsetHeight);
     panel.style.left = x + 'px';
     panel.style.top  = y + 'px';
-  });
+  }
+
+  handle.addEventListener('mousedown', e => { overlayStart(e.clientX, e.clientY); e.preventDefault(); });
+  handle.addEventListener('touchstart', e => { if (e.touches.length === 1) { overlayStart(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); } }, { passive: false });
+
+  window.addEventListener('mousemove', e => overlayMove(e.clientX, e.clientY));
   window.addEventListener('mouseup', () => { dragging = false; });
+  window.addEventListener('touchmove', e => { if (dragging) overlayMove(e.touches[0].clientX, e.touches[0].clientY); }, { passive: false });
+  window.addEventListener('touchend', () => { dragging = false; });
 })();
 
 (() => {
